@@ -1,0 +1,9 @@
+{
+  "data_path": "data/sample01.npy",
+  "GPU": "0",
+  "seed": 2026,
+  "patch_x": 256,
+  "phase": "test",
+  "weight_load_path": "weights/pretrained.pth",
+  "test_grid": 8
+}
