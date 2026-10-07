@@ -1,3 +1,0 @@
-numpy>=1.22
-torch>=2.0
-einops>=0.6
