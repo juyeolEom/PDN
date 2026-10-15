@@ -15,10 +15,6 @@ python -m pip install -r requirements.txt
 # Train from scratch.
 python train.py --config configs/train.json
 
-# Optional: Gaussian noise vaccination for 500 additional epochs.
-# Set weight_load_path in augment.json to the weight saved above.
-python train.py --config configs/augment.json
-
 # Inference: set weight_load_path in test.json to the desired trained weight.
 python train.py --config configs/test.json
 ```
@@ -43,21 +39,11 @@ Run the following commands from this repository directory. Paths in configs are 
 python train.py --config configs/train.json
 ```
 
-The only data/model paths are `data_path` and `weight_save_path` (a base directory). Training starts from random weights. `n_epochs` defaults to 1500. Pretrained loading and Gaussian noise options are unavailable in this mode.
-
-## Gaussian noise vaccination
-
-```bash
-python train.py --config configs/augment.json
-```
-
-Set `weight_load_path` to an existing weight file, plus `data_path`, `weight_save_path`, `noise_min`, and `noise_max`. This mode always trains for **500 additional epochs** with a new optimizer and scheduler. The epoch count cannot be overridden.
-
-For each patch, sigma is drawn uniformly from `[noise_min, noise_max]`. Independent zero-mean Gaussian noise with that standard deviation is added to every time bin and pixel after mean subtraction, spatial transforms, and temporal rolling, before subsampling. Values are direct standard deviations in the input data's units; no Aref scaling, clipping, or re-centering is applied. Require `0 <= noise_min <= noise_max` and `noise_max > 0`. The example `noise_max=0.01` is only a placeholder, not a recommended level for every dataset.
+The only data/model paths are `data_path` and `weight_save_path` (a base directory). Training starts from random weights. `n_epochs` defaults to 1500. Pretrained loading is unavailable in this mode.
 
 ## ST mixing
 
-Both training configs accept a JSON boolean:
+The training config accepts a JSON boolean:
 
 ```json
 "st_mixing": true
@@ -66,7 +52,7 @@ Both training configs accept a JSON boolean:
 - `false` (default): choose an input/target neighbor triplet per 2 x 2 spatial block and share it across all time bins.
 - `true`: choose the triplet independently for each spatial block and time bin (the original commented time-variant sampling).
 
-This setting is independent of Gaussian augmentation. CLI overrides are `--st_mixing` and `--no-st_mixing`. No ST mixing is applied during inference.
+CLI overrides are `--st_mixing` and `--no-st_mixing`. No ST mixing is applied during inference.
 
 ## Inference
 
@@ -96,9 +82,7 @@ Inference writes `<weight parent>/<timestamp>/<data stem>_denoised.npy`. It reta
 
 Both training and inference save `config.json` beside their output. It contains
 the merged defaults, input config, and CLI overrides, with the effective mask
-seed filled in for training. The source config path is omitted. In augmentation
-mode, `phase: "augment"` always means 500 additional epochs; no epoch override is
-stored. Saved configs can be reused with `python train.py --config <saved-config>`
+seed filled in for training. The source config path is omitted. Saved configs can be reused with `python train.py --config <saved-config>`
 from the same working directory (relative paths keep their original meaning).
 
 ## Data and configuration
@@ -111,7 +95,6 @@ Configs include GPU indices, random seeds, patch/batch sizes, and optimizer/sche
 
 ```bash
 python train.py --config configs/train.json --n_epochs 100 --data_path data/sample02.npy
-python train.py --phase augment --data_path data/sample01.npy --weight_load_path weights/pretrained.pth --weight_save_path weights --noise_min 0 --noise_max 0.01 --st_mixing
 python train.py --phase test --help
 ```
 

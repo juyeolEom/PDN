@@ -11,7 +11,7 @@ from .config import save_config
 from .dataloader import trainset, testset
 from .pulse_denoise_net import PDN
 from .sampling import generate_mask_pair, generate_subimages
-from .utils import build_generator, build_mask_generator, get_device, get_device_ids, seed_everything, seed_worker, seed_noise_worker
+from .utils import build_generator, build_mask_generator, get_device, get_device_ids, seed_everything, seed_worker
 
 
 def build_model(opt, device):
@@ -27,14 +27,12 @@ def build_model(opt, device):
 
 def build_trainloader(opt):
     train_data = trainset(opt)
-    worker_init = (seed_noise_worker if train_data.additive_noise.enabled
-                   else partial(seed_worker, base_seed=opt.seed))
     return DataLoader(
         train_data,
         batch_size=opt.batch_size,
         shuffle=True,
         num_workers=opt.num_workers,
-        worker_init_fn=worker_init,
+        worker_init_fn=partial(seed_worker, base_seed=opt.seed),
         generator=build_generator(opt.seed),
     )
 
@@ -87,9 +85,7 @@ def run_train(opt):
     mask_seed = opt.seed if opt.mask_seed is None else opt.mask_seed
     mask_generator = build_mask_generator(mask_seed, device)
 
-    if opt.phase == 'augment':
-        load_weights(opt.weight_load_path, net, device)
-    epochs = 500 if opt.phase == 'augment' else opt.n_epochs
+    epochs = opt.n_epochs
     for epoch in range(epochs):
         train_loss = train_epoch(
             net, trainloader, optimizer, scheduler, l1, device,

@@ -13,7 +13,6 @@ try:
     import numpy as np
     import torch
     from ResUNet import engine
-    from ResUNet.additive_noise import RandomAdditiveNoise
     from ResUNet.checkpoint import load_weights, save_weights
     from ResUNet.sampling import generate_mask_pair
 except ModuleNotFoundError:
@@ -23,7 +22,7 @@ except ModuleNotFoundError:
 class ConfigTests(unittest.TestCase):
     def test_saved_config_records_overrides_and_can_be_reused(self):
         root = Path(__file__).resolve().parents[1]
-        for phase in ('train', 'augment', 'test'):
+        for phase in ('train', 'test'):
             args = ['--config', str(root / 'configs' / (phase + '.json')),
                     '--data_path', 'data/override.npy']
             if phase != 'test':
@@ -45,7 +44,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_examples_and_overrides(self):
         root = Path(__file__).resolve().parents[1]
-        for mode in ('train', 'augment', 'test'):
+        for mode in ('train', 'test'):
             opt = parse_args(['--config', str(root / 'configs' / (mode + '.json'))])
             self.assertEqual(opt.phase, mode)
         opt = parse_args(['--config', str(root / 'configs/train.json'), '--st_mixing', '--n_epochs', '2'])
@@ -56,8 +55,8 @@ class ConfigTests(unittest.TestCase):
         cases = [
             ['--phase', 'train', '--weight_load_path', 'x.pth'],
             ['--phase', 'train', '--noise_max', '0.1'],
-            ['--phase', 'augment', '--noise_max', '0.1', '--n_epochs', '1'],
-            ['--phase', 'augment', '--noise_max', '0'],
+            ['--phase', 'augment'],
+            ['--phase', 'train', '--noise_min', '0'],
             ['--phase', 'test', '--weight_save_path', 'weights'],
             ['--phase', 'test', '--st_mixing'],
             ['--save_best', 'True'],
@@ -79,12 +78,6 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(bool(torch.equal(blocks[:, :1].expand_as(blocks), blocks)), not mixing)
             self.assertFalse(bool(torch.any(masks[0] & masks[1])))
             self.assertFalse(bool(torch.any(masks[0] & masks[2])))
-
-    def test_noise_uses_direct_sigma(self):
-        np.random.seed(42)
-        noise = RandomAdditiveNoise(0.2, 0.2)(np.zeros((128, 64, 64), dtype=np.float32))
-        self.assertAlmostEqual(float(noise.std()), 0.2, delta=0.002)
-        self.assertAlmostEqual(float(noise.mean()), 0, delta=0.002)
 
     def test_weights_and_legacy_loading(self):
         net = torch.nn.Linear(2, 1)
@@ -114,21 +107,18 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue((outputs[0].parent / 'config.json').is_file())
             np.testing.assert_allclose(np.load(outputs[0]), data, atol=1e-6)
 
-    def test_training_modes_save_once_at_end(self):
-        for phase, epochs in [('train', 2), ('augment', 500)]:
-            args = ['--phase', phase]
-            args += ['--n_epochs', '2'] if phase == 'train' else ['--noise_max', '0.1']
-            opt = parse_args(args)
-            with tempfile.TemporaryDirectory() as tmp:
-                opt.weight_save_path = tmp
-                with patch.object(engine, 'build_model', return_value=torch.nn.Linear(2, 1)), patch.object(engine, 'build_trainloader', return_value=[]), patch.object(engine, 'train_epoch', return_value=1.0) as epoch, patch.object(engine, 'load_weights') as load, patch.object(engine, 'save_weights') as save, contextlib.redirect_stdout(io.StringIO()):
-                    engine.run_train(opt)
-                self.assertEqual(epoch.call_count, epochs)
-                self.assertEqual(load.call_count, int(phase == 'augment'))
-                save.assert_called_once()
-                self.assertEqual(save.call_args.args[1].name, 'weights.pth')
-                self.assertNotEqual(save.call_args.args[1].parent, Path(tmp))
-                self.assertTrue((save.call_args.args[1].parent / 'config.json').is_file())
+    def test_training_saves_once_at_end(self):
+        opt = parse_args(['--phase', 'train', '--n_epochs', '2'])
+        with tempfile.TemporaryDirectory() as tmp:
+            opt.weight_save_path = tmp
+            with patch.object(engine, 'build_model', return_value=torch.nn.Linear(2, 1)), patch.object(engine, 'build_trainloader', return_value=[]), patch.object(engine, 'train_epoch', return_value=1.0) as epoch, patch.object(engine, 'load_weights') as load, patch.object(engine, 'save_weights') as save, contextlib.redirect_stdout(io.StringIO()):
+                engine.run_train(opt)
+            self.assertEqual(epoch.call_count, 2)
+            load.assert_not_called()
+            save.assert_called_once()
+            self.assertEqual(save.call_args.args[1].name, 'weights.pth')
+            self.assertNotEqual(save.call_args.args[1].parent, Path(tmp))
+            self.assertTrue((save.call_args.args[1].parent / 'config.json').is_file())
 
 
 if __name__ == '__main__':

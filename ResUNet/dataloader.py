@@ -4,7 +4,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .additive_noise import RandomAdditiveNoise
 
 def load_pulse(path):
     pulse = np.load(path, allow_pickle=False)
@@ -55,10 +54,6 @@ class trainset(Dataset):
 
         if min(self.pulse_data.shape[1:]) < self.patch_x:
             raise ValueError('Training data must be at least patch_x in both spatial dimensions.')
-        self.additive_noise = RandomAdditiveNoise(
-            opt.noise_min if opt.phase == 'augment' else 0.0,
-            opt.noise_max if opt.phase == 'augment' else 0.0,
-        )
 
     def __getitem__(self, index):
         pulse_data = self.pulse_data
@@ -71,9 +66,6 @@ class trainset(Dataset):
 
         pulse_data = random_transform(pulse_data)
         pulse_data = random_roll(pulse_data)
-
-        # After centering/augmentation, before engine.py creates spatial pairs.
-        pulse_data = self.additive_noise(pulse_data)
 
         pulse_data = torch.from_numpy(np.expand_dims(pulse_data, 0).copy())
         return pulse_data

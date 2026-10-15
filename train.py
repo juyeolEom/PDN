@@ -1,4 +1,4 @@
-"""PDN entry point: initial training, Gaussian augmentation, or inference."""
+"""PDN entry point: training or inference."""
 import argparse
 import json
 import math
@@ -7,7 +7,7 @@ from pathlib import Path
 
 def build_parser(phase):
     parser = argparse.ArgumentParser(description='PDN pulse denoising')
-    parser.add_argument('--phase', choices=['train', 'augment', 'test'], default=phase)
+    parser.add_argument('--phase', choices=['train', 'test'], default=phase)
     parser.add_argument('--config', help='JSON configuration; CLI arguments override its values')
     parser.add_argument('--data_path', default='data/sample01.npy')
     parser.add_argument('--GPU', default='0')
@@ -29,19 +29,14 @@ def build_parser(phase):
         parser.add_argument('--b2', type=float, default=0.99)
         parser.add_argument('--lr_decay', type=float, default=0.2)
         parser.add_argument('--lr_decay_patience', type=int, default=100)
-        if phase == 'augment':
-            parser.add_argument('--weight_load_path', default='weights/pretrained.pth')
-            parser.add_argument('--noise_min', type=float, default=0.0)
-            parser.add_argument('--noise_max', type=float, default=None)
-        else:
-            parser.add_argument('--n_epochs', type=int, default=1500)
+        parser.add_argument('--n_epochs', type=int, default=1500)
     return parser
 
 
 def parse_args(argv=None):
     bootstrap = argparse.ArgumentParser(add_help=False)
     bootstrap.add_argument('--config')
-    bootstrap.add_argument('--phase', choices=['train', 'augment', 'test'])
+    bootstrap.add_argument('--phase', choices=['train', 'test'])
     known, _ = bootstrap.parse_known_args(argv)
     settings = {}
     if known.config:
@@ -52,7 +47,7 @@ def parse_args(argv=None):
         if not isinstance(settings, dict):
             bootstrap.error('Config must be a JSON object.')
     phase = known.phase or settings.get('phase', 'train')
-    if phase not in ('train', 'augment', 'test'):
+    if phase not in ('train', 'test'):
         bootstrap.error('Invalid phase in config.')
     parser = build_parser(phase)
     actions = {a.dest: a for a in parser._actions}
@@ -91,12 +86,8 @@ def parse_args(argv=None):
             parser.error('Require 0 < lr_decay < 1 and nonnegative patience.')
         if opt.mask_seed is not None and not 0 <= opt.mask_seed < 2**32:
             parser.error('mask_seed must be between 0 and 2**32 - 1.')
-        if phase == 'train' and opt.n_epochs < 1:
+        if opt.n_epochs < 1:
             parser.error('n_epochs must be positive.')
-        if phase == 'augment' and (opt.noise_max is None or not math.isfinite(opt.noise_min)
-                or not math.isfinite(opt.noise_max) or not 0 <= opt.noise_min <= opt.noise_max
-                or opt.noise_max <= 0):
-            parser.error('Augmentation requires finite 0 <= noise_min <= noise_max and noise_max > 0.')
     return opt
 
 

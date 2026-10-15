@@ -33,13 +33,6 @@ def seed_worker(worker_id, base_seed=2026):
     torch.manual_seed(worker_seed)
 
 
-def seed_noise_worker(worker_id):
-    """Use DataLoader's epoch-specific seed instead of restarting each epoch."""
-    worker_seed = torch.initial_seed() % (2 ** 32)
-    np.random.seed(worker_seed)
-    random.seed(worker_seed)
-
-
 def build_generator(seed):
     g = torch.Generator()
     g.manual_seed(seed)
